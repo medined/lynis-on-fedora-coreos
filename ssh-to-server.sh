@@ -3,5 +3,5 @@
 #
 # Use ssh-add to ensure your PEM file is accessible.
 #
-
-ssh core@18.208.204.195
+IP_ADDRESS=$(cat inventory | tail -n 1)
+ssh core@$IP_ADDRESS
