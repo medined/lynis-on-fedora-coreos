@@ -1,0 +1,21 @@
+---
+- hosts: fcos
+  gather_facts: false
+  become: yes
+
+  vars:
+    ansible_python_interpreter: '/usr/bin/python3'
+    password_max_days: '90'
+    password_min_days: '1'
+    ssh_port: '15762'
+    grub_user: core
+
+  tasks:
+
+    - name: STRG-1846 - Check if firewire storage is disabled
+      copy:
+        dest: /etc/modprobe.d/firewire.conf
+        content: |
+          blacklist firewire-core
+      tags:
+        - STRG-1846

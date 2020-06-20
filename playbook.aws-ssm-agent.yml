@@ -1,0 +1,70 @@
+---
+- hosts: fcos
+  gather_facts: false
+
+  vars:
+    ansible_python_interpreter: '/usr/bin/python3'
+
+  tasks:
+
+  # ##########
+  # # Amazon SSM Agent
+  # ##########
+
+  - name: Copy Amazon SSM Agent
+    become: yes
+    copy:
+      src: "{{item}}"
+      dest: /usr/local/bin
+      mode: 755
+      force: no
+    with_fileglob:
+      - "{{ssm_binary_dir}}/*"
+
+  - name: Make logging directory
+    become: yes
+    file:
+      path: /var/log/amazon/ssm
+      state: directory
+
+  - name: Make config directory
+    become: yes
+    file:
+      path: /etc/amazon/ssm
+      state: directory
+
+  - name: Copy Amazon SSM Agent JSON
+    become: yes
+    copy:
+      src: "{{ssm_binary_dir}}/amazon-ssm-agent.json.template"
+      dest: /etc/amazon/ssm/amazon-ssm-agent.json
+
+  - name: Copy Amazon SSM Agent JSON
+    become: yes
+    copy:
+      src: "{{ssm_binary_dir}}/seelog_unix.xml"
+      dest: /etc/amazon/ssm
+
+  - name: Create SSM service file.
+    become: yes
+    copy:
+      dest: /etc/systemd/system/amazon-ssm-agent.service
+      content: |
+        [Unit]
+        Description=amazon-ssm-agent
+        [Service]
+        Type=simple
+        WorkingDirectory=/usr/local/bin
+        ExecStart=/usr/local/bin/amazon-ssm-agent
+        KillMode=process
+        Restart=on-failure
+        RestartSec=15min
+        [Install]
+        WantedBy=network-online.target
+
+  - name: Enable SSM service
+    become: yes
+    service:
+      name: amazon-ssm-agent
+      enabled: yes
+      state: started
