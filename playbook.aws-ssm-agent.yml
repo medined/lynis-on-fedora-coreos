@@ -2,8 +2,8 @@
 - hosts: fcos
   gather_facts: false
 
-  vars:
-    ansible_python_interpreter: '/usr/bin/python3'
+  vars_files:
+    - external_vars.yml
 
   tasks:
 
