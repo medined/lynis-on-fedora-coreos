@@ -12,4 +12,4 @@ python3 \
   $ANSBILE_PLAYBOOK \
   -i inventory \
   -u core \
-  playbook.lynis.confirmed.yml
+  playbook.02-lynis-79.yml

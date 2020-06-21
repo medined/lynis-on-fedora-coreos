@@ -10,5 +10,4 @@ python3 \
   $ANSBILE_PLAYBOOK \
   -i inventory \
   -u core \
-  -vvvvv \
   playbook.experiment.yml

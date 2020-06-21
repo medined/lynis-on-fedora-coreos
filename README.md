@@ -80,7 +80,14 @@ As you harden your instance, you can create an AMI to "save" your progress. If t
 
 ```bash
 ./start-fcos-instance.sh
+./run-01-ostree-playbook.sh
 ```
+
+The first script starts a new instance, installs python and then reboots.
+
+The second script installs a bunch of packages including `lynis`. Even though the packages are installed using separate ansible tasks, they are all part of one layer from FCOS's perspective. After the packages are installed, the server reboots.
+
+Now you can start to harden the server.
 
 ## SSH To Server
 
@@ -88,23 +95,10 @@ As you harden your instance, you can create an AMI to "save" your progress. If t
 ./ssh-to-server.sh
 ```
 
-## Run Lynis v2.7.5
-
-This command runs `lynis` on the remote server using Ansible. Afterwords, the log file is fetched into /tmp/fetch. The name of latest log file should be displayed.
+## Run Lynis
 
 ```bash
 ./run-lynis-audit-playbook.sh
-```
-
-## Run Lynis v3.0.0
-
-```bash
-sudo su -
-cd /usr/local/bin
-curl -O https://downloads.cisofy.com/lynis/lynis-3.0.0.tar.gz
-tar xf lynis-3.0.0.tar.gz
-cd lynis
-./lynis --debug --verbose audit system
 ```
 
 # Backup Information
