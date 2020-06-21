@@ -1,0 +1,21 @@
+---
+- hosts: fcos
+  become: yes
+  gather_facts: false
+
+  vars_files:
+    - external_vars.yml
+
+  #
+  # This playbook runs the lynis audit process on the remote server.
+  #
+
+  tasks:
+
+      - name: Run lynis audit
+        command: lynis audit system
+
+      - name: Fetch lynix log file. Store file into /tmp/fetched/host.example.com/tmp/somefile
+        fetch:
+          src: /var/log/lynis.log
+          dest: /tmp/fetched

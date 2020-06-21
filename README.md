@@ -85,10 +85,10 @@ As you harden your instance, you can create an AMI to "save" your progress. If t
 
 ## Run Lynis v2.7.5
 
+This command runs `lynis` on the remote server using Ansible. Afterwords, the log file is fetched into /tmp/fetch. The name of latest log file should be displayed.
+
 ```bash
-sudo lynis audit system
-sudo chmod 644 /var/log/lynis.log
-more /var/log/lynis.log
+./run-lynis-audit-playbook.sh
 ```
 
 
