@@ -8,10 +8,6 @@
 
   tasks:
 
-    - name: STRG-1846 - Check if firewire storage is disabled
-      copy:
-        dest: /etc/modprobe.d/firewire.conf
-        content: |
-          blacklist firewire-core
-      tags:
-        - STRG-1846
+    # A harmless task to as placeholder.
+    - debug:
+        var: "{{ ansible_python_interpreter }}"

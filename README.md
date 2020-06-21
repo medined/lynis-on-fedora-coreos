@@ -81,6 +81,7 @@ As you harden your instance, you can create an AMI to "save" your progress. If t
 ```bash
 ./start-fcos-instance.sh
 ./run-01-ostree-playbook.sh
+./run-02-lynis-77-playbook.sh
 ```
 
 The first script starts a new instance, installs python and then reboots.
