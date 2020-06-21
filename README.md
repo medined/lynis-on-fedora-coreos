@@ -9,6 +9,11 @@ This work is being done at the request of the Enterprise Container Working Group
 * Provision an EC2 instance based on a Fedora CoreOS AMI. The instance name will be timestamped so you can make more than one.
 * Pass as many Lydis tests as possible.
 
+## Links
+
+* https://cisofy.com/lynis/
+* https://github.com/CISOfy/lynis-ansible
+
 ## Definitions
 
 [**Fedora CoreOS**](https://getfedora.org/coreos), also known as FCOS, is an automatically-updating, minimal operating system for running containerized workloads securely and at scale. However, we’ll probably be replacing virtual servers instead of updating them. **The Fedora CoreOS ecosystem is very dynamic and anything in this document might change.**
@@ -37,6 +42,33 @@ Edit the `start-fcos-instance.sh` file to set the following variables.
 
 ```bash
 ./start-fcos-instance.sh
+```
+
+## SSH To Server
+
+```bash
+./ssh-to-server.sh
+```
+
+## Run Lynis v2.7.5
+
+```bash
+sudo su -
+sudo lynis audit system
+more /var/log/lynis.log
+```
+
+
+## Run Lynis v3.0.0
+
+```bash
+sudo su -
+cd /usr/local/bin
+curl -O https://downloads.cisofy.com/lynis/lynis-3.0.0.tar.gz
+tar xf lynis-3.0.0.tar.gz
+cd lynis
+cp default.prf custom.prf
+./lynis audit system | tee lynis.log
 ```
 
 # Backup Information

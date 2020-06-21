@@ -7,13 +7,25 @@
 
   tasks:
 
+    #
+    # I'll be terminating images instead of auto-updating. Also 
+    # my servers might not have access to the Internet.
+    #
+    - name: Stop and Disable Zincati auto-updating
+      become: yes
+      systemd:
+        enabled: no
+        masked: yes
+        name: zincati
+        state: stopped
+
     - name: Disable service debug-shell
       become: yes
       systemd:
-        name: debug-shell.service
         enabled: no
-        state: stopped
         masked: yes
+        name: debug-shell.service
+        state: stopped
       tags:
         - service_debug-shell_disabled
         - medium_severity
