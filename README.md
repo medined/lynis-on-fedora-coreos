@@ -9,6 +9,11 @@ This work is being done at the request of the Enterprise Container Working Group
 * Provision an EC2 instance based on a Fedora CoreOS AMI. The instance name will be timestamped so you can make more than one.
 * Pass as many Lydis tests as possible.
 
+## Commentary
+
+I'm working through how to efficiently mitigate the findings from Lydis. Provisioning a server complete with running `rpm-ostree` and playbooks does take awhile. And I'm not full-time on this project. My current thinking is to label playbook with the hardening score achieved after running them. This might make it easier to review or repeat the work.
+
+
 ## Links
 
 * https://cisofy.com/lynis/
@@ -90,7 +95,6 @@ This command runs `lynis` on the remote server using Ansible. Afterwords, the lo
 ```bash
 ./run-lynis-audit-playbook.sh
 ```
-
 
 ## Run Lynis v3.0.0
 
