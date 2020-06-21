@@ -1,0 +1,6 @@
+---
+ansible_python_interpreter: /usr/bin/python3
+password_max_days: 90
+password_min_days: 1
+ssh_port: 15762
+grub_user: core

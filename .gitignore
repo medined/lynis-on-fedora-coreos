@@ -1,3 +1,4 @@
+external_vars.yml
 inventory
 *.fcc
 *.ign

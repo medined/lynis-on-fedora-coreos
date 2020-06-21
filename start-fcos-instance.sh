@@ -29,9 +29,11 @@ if [ ! -f grub-password.txt ]; then
   exit
 fi
 
-ENABLE_CLOUDWATCH_AGENT=0
-ENABLE_SSM_AGENT=0
-ENABLE_LYNIS=0
+ENABLE_MAIN_PLAYBOOK=1
+ENABLE_CLOUDWATCH_AGENT_PLAYBOOK=0
+ENABLE_SSM_AGENT_PLAYBOOK=0
+ENABLE_LYNIS_PLAYBOOK=0
+ENABLE_RPM_OSTREE=1
 
 #
 # Visit the following URL to determine the AMI that you want to start.
@@ -44,7 +46,21 @@ ENABLE_LYNIS=0
 # The AMI is hard-coded because this project tries to pass Lydis tests and I 
 # don't want a moving target.
 
-AMI="ami-0ac9fa195c3a98c56"
+AMI="ami-0ac9fa195c3a98c56"    # 32.20200601.3.0 stable
+
+AMI="ami-0d42d687e65a2f5bf"
+
+LYNIS_HARDENING_SCORE=$(aws ec2 describe-images --image-ids $AMI --query 'Images[].Tags[?Key==`lynis-hardening-score`].Value[]' --output text)
+if [ ! -z $LYNIS_HARDENING_SCORE ]; then
+  # The AMI was previously created by this script so some steps can be avoided.
+  ENABLE_MAIN_PLAYBOOK=0
+  ENABLE_RPM_OSTREE=0
+fi
+
+echo "LYNIS_HARDENING_SCORE: $LYNIS_HARDENING_SCORE"
+echo "ENABLE_MAIN_PLAYBOOK: $ENABLE_MAIN_PLAYBOOK"
+echo "ENABLE_RPM_OSTREE: $ENABLE_RPM_OSTREE"
+
 AWS_PROFILE="ic1"
 AWS_REGION="us-east-1"
 INSTANCE_TYPE="t3.medium"
@@ -124,7 +140,7 @@ fi
 
 INSTANCE_NAME="fcos-$(date +%Y%m%d%H%M%S)"
 
-if [ $ENABLE_SSM_AGENT == 1 ]; then
+if [ $ENABLE_SSM_AGENT_PLAYBOOK == 1 ]; then
   SSM_TAG=",{Key=ssm-installed,Value=true}"
 else
   SSM_TAG=""
@@ -170,33 +186,36 @@ ssh-keyscan -H $PUBLIC_IP >> ~/.ssh/known_hosts 2>/dev/null
 #
 # How to remove all packages:
 #   sudo rpm-ostree uninstall --all
-# 
-
-echo "Install packages one by one. More specific errors this way."
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install python libselinux-python3"
-
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install audit"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install conntrack"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install ethtool"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install golang"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install lynis"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install make"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install openscap-scanner"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install scap-security-guide"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install setools"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install usbguard"
-ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install zip"
-
 #
-# Installing setroubeshoot causes the following conflict:
-#   Forbidden base package replacements:
-#     libreport-filesystem 2.12.0-1.fc31 -> 2.13.1-3.fc31 (updates)
-# ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install setroubleshoot"
 
-echo "reboot instance."
-aws ec2 reboot-instances --instance-ids $INSTANCE_ID --region $AWS_REGION
-echo "waiting for reboot command to process"
-sleep 10
+if [ $ENABLE_RPM_OSTREE == 1 ]; then
+  echo "Install packages one by one. More specific errors this way."
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install python libselinux-python3"
+
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install audit"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install conntrack"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install ethtool"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install golang"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install lynis"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install make"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install openscap-scanner"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install scap-security-guide"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install setools"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install usbguard"
+  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install zip"
+
+  #
+  # Installing setroubeshoot causes the following conflict:
+  #   Forbidden base package replacements:
+  #     libreport-filesystem 2.12.0-1.fc31 -> 2.13.1-3.fc31 (updates)
+  # ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install setroubleshoot"
+
+  echo "reboot instance."
+  aws ec2 reboot-instances --instance-ids $INSTANCE_ID --region $AWS_REGION
+  echo "waiting for reboot command to process"
+  sleep 10
+fi 
+
 
 ./test-ssh.sh $PUBLIC_IP $PKI_PRIVATE_PEM $SSH_USER
 
@@ -208,15 +227,15 @@ EOF
 
 echo "run playbook."
 
-GRUB_PASSWORD=$(cat grub-password.txt)
+if [ $ENABLE_MAIN_PLAYBOOK == 1]; then
+  python3 $(which ansible-playbook) \
+      -i inventory \
+      --private-key $PKI_PRIVATE_PEM \
+      -u $SSH_USER \
+      playbook.main.yml
+fi 
 
-python3 $(which ansible-playbook) \
-    -i inventory \
-    --private-key $PKI_PRIVATE_PEM \
-    -u $SSH_USER \
-    playbook.main.yml
-
-if [ $ENABLE_SSM_AGENT == 1 ]; then
+if [ $ENABLE_SSM_AGENT_PLAYBOOK == 1 ]; then
   python3 $(which ansible-playbook) \
       --extra-vars "ssm_binary_dir=$SSM_BINARY_DIR" \
       -i inventory \
@@ -225,7 +244,7 @@ if [ $ENABLE_SSM_AGENT == 1 ]; then
       playbook.aws-ssm-agent.yml
 fi
 
-if [ $ENABLE_CLOUDWATCH_AGENT == 1 ]; then
+if [ $ENABLE_CLOUDWATCH_AGENT_PLAYBOOK == 1 ]; then
   python3 $(which ansible-playbook) \
       -i inventory \
       --private-key $PKI_PRIVATE_PEM \
@@ -233,7 +252,8 @@ if [ $ENABLE_CLOUDWATCH_AGENT == 1 ]; then
       playbook.aws-cloudwatch-agent.yml
 fi
 
-if [ $ENABLE_LYNIS == 1 ]; then
+if [ $ENABLE_LYNIS_PLAYBOOK == 1 ]; then
+  GRUB_PASSWORD=$(cat grub-password.txt)
   python3 $(which ansible-playbook) \
       --extra-vars "grub_password=$GRUB_PASSWORD" \
       -i inventory \

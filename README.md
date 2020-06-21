@@ -22,6 +22,21 @@ This work is being done at the request of the Enterprise Container Working Group
 
 ## Configuration
 
+### external_vars.yaml
+
+This file holds variables used by the Ansible playbooks. They are externalized so they don't repeat in every playbook.
+
+```yaml
+---
+ansible_python_interpreter: /usr/bin/python3
+password_max_days: 90
+password_min_days: 1
+ssh_port: 15762
+grub_user: core
+```
+
+### start-fcos-instance.sh
+
 Edit the `start-fcos-instance.sh` file to set the following variables.
 
 | Name | Example | Description |
@@ -38,6 +53,8 @@ Edit the `start-fcos-instance.sh` file to set the following variables.
 | PKI_PUBLIC_PUB | PUBLIC_KEY.pub |
 | SSM_BINARY_DIR | amazon-ssm-agent/bin | The location of  binaries associated with the Amazon SSM Agent |
 
+As you harden your instance, you can create an AMI to "save" your progress. If the AMI has a tag called `lynis-hardening-score` then many of the provisioning steps are avoided. Then run playbooks manually as needed.
+
 ## Provision FCOS Server
 
 ```bash
@@ -53,8 +70,8 @@ Edit the `start-fcos-instance.sh` file to set the following variables.
 ## Run Lynis v2.7.5
 
 ```bash
-sudo su -
 sudo lynis audit system
+sudo chmod 644 /var/log/lynis.log
 more /var/log/lynis.log
 ```
 
@@ -67,8 +84,7 @@ cd /usr/local/bin
 curl -O https://downloads.cisofy.com/lynis/lynis-3.0.0.tar.gz
 tar xf lynis-3.0.0.tar.gz
 cd lynis
-cp default.prf custom.prf
-./lynis audit system | tee lynis.log
+./lynis --debug --verbose audit system
 ```
 
 # Backup Information
