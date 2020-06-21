@@ -24,11 +24,16 @@ if [ $? != 0 ]; then
   exit
 fi
 
-ENABLE_MAIN_PLAYBOOK=1
+ENABLE_RPM_OSTREE=1
+
+#
+# I don't know that these playbooks are 100% indenpendent of each other. I think
+# they are but the assertion is unproven.
+#
 ENABLE_CLOUDWATCH_AGENT_PLAYBOOK=0
 ENABLE_SSM_AGENT_PLAYBOOK=0
-ENABLE_LYNIS_PLAYBOOK=0
-ENABLE_RPM_OSTREE=1
+ENABLE_LYNIS_65_PLAYBOOK=1
+ENABLE_LYNIS_79_PLAYBOOK=0
 
 #
 # Visit the following URL to determine the AMI that you want to start.
@@ -48,12 +53,12 @@ AMI="ami-0d42d687e65a2f5bf"
 LYNIS_HARDENING_SCORE=$(aws ec2 describe-images --image-ids $AMI --query 'Images[].Tags[?Key==`lynis-hardening-score`].Value[]' --output text)
 if [ ! -z $LYNIS_HARDENING_SCORE ]; then
   # The AMI was previously created by this script so some steps can be avoided.
-  ENABLE_MAIN_PLAYBOOK=0
+  ENABLE_LYNIS_65_PLAYBOOK=0
   ENABLE_RPM_OSTREE=0
 fi
 
 echo "LYNIS_HARDENING_SCORE: $LYNIS_HARDENING_SCORE"
-echo "ENABLE_MAIN_PLAYBOOK: $ENABLE_MAIN_PLAYBOOK"
+echo "ENABLE_LYNIS_65_PLAYBOOK: $ENABLE_LYNIS_65_PLAYBOOK"
 echo "ENABLE_RPM_OSTREE: $ENABLE_RPM_OSTREE"
 
 AWS_PROFILE="ic1"
@@ -222,14 +227,6 @@ EOF
 
 echo "run playbook."
 
-if [ $ENABLE_MAIN_PLAYBOOK == 1]; then
-  python3 $(which ansible-playbook) \
-      -i inventory \
-      --private-key $PKI_PRIVATE_PEM \
-      -u $SSH_USER \
-      playbook.main.yml
-fi 
-
 if [ $ENABLE_SSM_AGENT_PLAYBOOK == 1 ]; then
   python3 $(which ansible-playbook) \
       --extra-vars "ssm_binary_dir=$SSM_BINARY_DIR" \
@@ -247,12 +244,20 @@ if [ $ENABLE_CLOUDWATCH_AGENT_PLAYBOOK == 1 ]; then
       playbook.aws-cloudwatch-agent.yml
 fi
 
-if [ $ENABLE_LYNIS_PLAYBOOK == 1 ]; then
+if [ $ENABLE_LYNIS_65_PLAYBOOK == 1]; then
   python3 $(which ansible-playbook) \
       -i inventory \
       --private-key $PKI_PRIVATE_PEM \
       -u $SSH_USER \
-      playbook.lynis.confirmed.yml
+      playbook.lynis.65.yml
+fi 
+
+if [ $ENABLE_LYNIS_79_PLAYBOOK == 1 ]; then
+  python3 $(which ansible-playbook) \
+      -i inventory \
+      --private-key $PKI_PRIVATE_PEM \
+      -u $SSH_USER \
+      playbook.lynis.79.yml
 fi
 
 echo "display variables."
