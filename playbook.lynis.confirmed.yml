@@ -160,6 +160,11 @@
         mode: 0700
       tags: BOOT-5122
 
+    #
+    # This task should fail if the password file is not found.
+    - set_fact:
+        grub_password: "{{lookup('file', grub_password_file) }}"
+      
     - name: BOOT-5122 - add password
       lineinfile:
         dest: /etc/grub2.cfg

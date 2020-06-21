@@ -22,9 +22,24 @@ This work is being done at the request of the Enterprise Container Working Group
 
 ## Configuration
 
-### external_vars.yaml
+## Generate GRUB Password
+
+The grub boot loader should be password protected. This password is only needed by some physically at the server. Normal reboots are not affected. This is a manual process because I don't want to bury this information inside scripts. Password creation is important. The following command. Enter a password twice. Save the password somewhere in case you do need physical access to the server.
+
+```bash
+grub-mkpasswd-pbkdf2
+PBKDF2 hash of your password is grub.pbkdf2.sha512.10000...042D445
+```
+
+Copy the part after "is " into a file called `grub_password.txt`. I've shortened the value to save space. If you use a different name, make sure to update `grub_password_file` in `external_vars.yml`.
+
+### external_vars.yml
 
 This file holds variables used by the Ansible playbooks. They are externalized so they don't repeat in every playbook.
+
+**For simplicity's sake, the ssh_port is not being used yet.**
+
+The grub password is stored inside a file so that it won't be added to the code repository.
 
 ```yaml
 ---
@@ -32,6 +47,7 @@ ansible_python_interpreter: /usr/bin/python3
 password_max_days: 90
 password_min_days: 1
 ssh_port: 15762
+grub_password_file: grub-password.txt
 grub_user: core
 ```
 

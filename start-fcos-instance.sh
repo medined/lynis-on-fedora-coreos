@@ -24,11 +24,6 @@ if [ $? != 0 ]; then
   exit
 fi
 
-if [ ! -f grub-password.txt ]; then
-  echo "Missing grub-password.txt file."
-  exit
-fi
-
 ENABLE_MAIN_PLAYBOOK=1
 ENABLE_CLOUDWATCH_AGENT_PLAYBOOK=0
 ENABLE_SSM_AGENT_PLAYBOOK=0
@@ -253,9 +248,7 @@ if [ $ENABLE_CLOUDWATCH_AGENT_PLAYBOOK == 1 ]; then
 fi
 
 if [ $ENABLE_LYNIS_PLAYBOOK == 1 ]; then
-  GRUB_PASSWORD=$(cat grub-password.txt)
   python3 $(which ansible-playbook) \
-      --extra-vars "grub_password=$GRUB_PASSWORD" \
       -i inventory \
       --private-key $PKI_PRIVATE_PEM \
       -u $SSH_USER \
