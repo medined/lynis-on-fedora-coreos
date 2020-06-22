@@ -102,6 +102,10 @@ Now you can start to harden the server.
 ./run-lynis-audit-playbook.sh
 ```
 
+## Test Comments
+
+* AUTH-9408 (Logging of failed login attempts) - FAILLOG_ENAB is not supported.
+
 # Backup Information
 
 ## Getting Amazon SSM Agent

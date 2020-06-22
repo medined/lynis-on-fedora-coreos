@@ -10,4 +10,6 @@
 
     # A harmless task to as placeholder.
     - debug:
-        var: "{{ ansible_python_interpreter }}"
+        var: ansible_python_interpreter
+
+

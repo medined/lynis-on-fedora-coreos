@@ -23,7 +23,7 @@
 
       - name: Create Lynis Yum repository file.
         copy:
-          dest: /etc/yum.repos.d/xxx.repo
+          dest: /etc/yum.repos.d/lynis.repo
           content: |
             [lynis]
             name=CISOfy Software - Lynis package
@@ -32,7 +32,7 @@
             gpgkey=https://packages.cisofy.com/keys/cisofy-software-rpms-public.key
             gpgcheck=1
             priority=2
-          mode: 644
+          mode: "644"
 
       - name: Install audit.
         shell: rpm-ostree install audit

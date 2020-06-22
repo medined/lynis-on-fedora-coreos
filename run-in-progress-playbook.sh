@@ -1,13 +1,7 @@
 #!/bin/bash
 
-#
-# Pay no attention to ths file.
-#
-
-ANSBILE_PLAYBOOK=$(which ansible-playbook)
-
 python3 \
-  $ANSBILE_PLAYBOOK \
+  $(which ansible-playbook) \
   -i inventory \
   -u core \
-  playbook.experiment.yml
+  playbook.lynis-in-progress.yml

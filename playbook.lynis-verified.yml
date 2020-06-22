@@ -1,0 +1,366 @@
+---
+- hosts: fcos
+  gather_facts: false
+  become: yes
+
+  vars_files:
+    - external_vars.yml
+
+  tasks:
+
+    # ....###....##.....##.########.##.....##
+    # ...##.##...##.....##....##....##.....##
+    # ..##...##..##.....##....##....##.....##
+    # .##.....##.##.....##....##....#########
+    # .#########.##.....##....##....##.....##
+    # .##.....##.##.....##....##....##.....##
+    # .##.....##..#######.....##....##.....##
+
+    - name: AUTH-9230 password hashing rounds - min
+      lineinfile:
+        path: /etc/login.defs
+        state: present
+        regexp: "^SHA_CRYPT_MIN_ROUNDS"
+        line: "SHA_CRYPT_MIN_ROUNDS {{ sha_crypt_min_rounds }}"
+      tags:
+        - AUTH-9230
+
+    - name: AUTH-9230 password hashing rounds - max
+      lineinfile:
+        path: /etc/login.defs
+        state: present
+        regexp: "^SHA_CRYPT_MAX_ROUNDS"
+        line: "SHA_CRYPT_MAX_ROUNDS {{ sha_crypt_max_rounds }}"
+      tags:
+        - AUTH-9230
+
+    - name: AUTH-9328 - Default umask values
+      lineinfile:
+        path: /etc/login.defs
+        state: present
+        regexp: "^UMASK"
+        line: "UMASK 027"
+      tags:
+        - AUTH-9328
+
+    # .########.....###....##....##.##....##.########.########.
+    # .##.....##...##.##...###...##.###...##.##.......##.....##
+    # .##.....##..##...##..####..##.####..##.##.......##.....##
+    # .########..##.....##.##.##.##.##.##.##.######...########.
+    # .##.....##.#########.##..####.##..####.##.......##...##..
+    # .##.....##.##.....##.##...###.##...###.##.......##....##.
+    # .########..##.....##.##....##.##....##.########.##.....##
+    
+    # This task should fail if the banner text file is not found.
+    - set_fact:
+        banner_text: "{{lookup('file', banner_text_file) }}"
+
+    - name: Banner create banner file
+      copy:
+        dest: /etc/banner.message.txt
+        content: "{{ banner_text }}"
+        mode: "644"
+
+    - name: Banner point to banner file
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#Banner"
+        line: "Banner /etc/banner.message.txt"
+
+    - name: Banner restart sshd
+      systemd:
+        name: sshd
+        state: restarted
+
+    # .########.####.##.......########
+    # .##........##..##.......##......
+    # .##........##..##.......##......
+    # .######....##..##.......######..
+    # .##........##..##.......##......
+    # .##........##..##.......##......
+    # .##.......####.########.########
+
+    #
+    # FCOS does not have an /etc/fstab or cron.
+    #   Therefore the mount command to add hidepid needs to
+    #   run on every boot.
+    #
+    # While this change does work, there may be race conditions
+    # that i am  unaware of.
+    #
+    # There might be user-space applications that depend on access to the 
+    # /proc for information. They would break.
+    #
+    # Running software in default podman/docker containers already has the 
+    # effect of hidepid 
+    #
+    - name: FILE-6344 proc mount - service file
+      copy:
+        dest: /etc/systemd/system/hidepid.service
+        content: |
+          [Unit]
+          Description=Hide pids on /proc
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/mount -o remount,rw,hidepid=2 /proc
+
+          [Timer]
+          OnBootSec=60
+
+          [Install]
+          WantedBy=multi-user.target
+      tags:
+        - FILE-6344
+
+    - name: FILE-6344 proc mount - enable service
+      systemd:
+        daemon_reload: yes
+        enabled: yes
+        masked: no
+        name: hidepid
+
+    #
+    # Some pages on the Internet suggested to use "blacklist <filesystem>"
+    # instead of the "/bin/true" approach. Empirical testing shows that 
+    # the approach below works. At least as far as Lynis is concerned.
+    #
+    - name: FILE-6430 (Disable mounting of some filesystems)
+      copy:
+        dest: /etc/modprobe.d/lynis-blacklist.conf
+        content: |
+          install cramfs /bin/true
+          install hfs /bin/true
+          install hfsplus /bin/true
+          install jffs2 /bin/true
+          install squashfs /bin/true
+          install udf /bin/true
+      tags:
+        - FILE-6430
+        - CCE-80137-3
+
+    # .########..######..########.########..####.##.....##
+    # .##.......##....##....##....##.....##..##..###...###
+    # .##.......##..........##....##.....##..##..####.####
+    # .######....######.....##....########...##..##.###.##
+    # .##.............##....##....##...##....##..##.....##
+    # .##.......##....##....##....##....##...##..##.....##
+    # .##........######.....##....##.....##.####.##.....##
+
+    #
+    # fstrim discards unused blocks on a mounted filesystem. In order to
+    # do this it looks at /etc/fstab which does not exist on FCOS.
+    # 
+    - name: Stop and Disable fstrim
+      systemd:
+        daemon_reload: yes
+        enabled: no
+        masked: yes
+        name: fstrim
+        state: stopped
+
+    # .##....##.########.########..##....##.########.##......
+    # .##...##..##.......##.....##.###...##.##.......##......
+    # .##..##...##.......##.....##.####..##.##.......##......
+    # .#####....######...########..##.##.##.######...##......
+    # .##..##...##.......##...##...##..####.##.......##......
+    # .##...##..##.......##....##..##...###.##.......##......
+    # .##....##.########.##.....##.##....##.########.########
+
+    - name: KRNL-5820 - Core dump - profile
+      copy:
+        dest: /etc/profile.d/KRNL-5820.sh
+        content: |
+          ulimit -c 0
+      mode: 644
+      tags:
+        - KRNL-5820
+
+    - name: KRNL-5820 - Core dump - limits
+      copy:
+        dest: /etc/security/limits.d/KRNL-5820.conf
+        content: |
+          #<domain> <type> <item> <value>
+          *         hard   core   0
+      tags:
+        - KRNL-5820
+
+    # ..######..##.....##.########.##.......##......
+    # .##....##.##.....##.##.......##.......##......
+    # .##.......##.....##.##.......##.......##......
+    # ..######..#########.######...##.......##......
+    # .......##.##.....##.##.......##.......##......
+    # .##....##.##.....##.##.......##.......##......
+    # ..######..##.....##.########.########.########
+
+    - name: SHLL-6220 (Idle session killing tools or settings)
+      copy:
+        dest: /etc/profile.d/SHLL-6220.sh
+        content: |
+          TMOUT=300
+          readonly TMOUT
+          export TMOUT
+        mode: "644"
+      tags:
+        - SHLL-6220
+
+    - name: SHLL-6230 umask check - /etc/bashrc 002
+      lineinfile:
+        path: /etc/bashrc
+        state: present
+        regexp: "^       umask 002"
+        line: "       umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/bashrc 022
+      lineinfile:
+        path: /etc/bashrc
+        state: present
+        regexp: "^       umask 022"
+        line: "       umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/csh.cshrc 002
+      lineinfile:
+        path: /etc/csh.cshrc
+        state: present
+        regexp: "^    umask 002"
+        line: "    umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/csh.cshrc 022
+      lineinfile:
+        path: /etc/csh.cshrc
+        state: present
+        regexp: "^    umask 022"
+        line: "    umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/profile 002
+      lineinfile:
+        path: /etc/profile
+        state: present
+        regexp: "^    umask 002"
+        line: "    umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/profile 022
+      lineinfile:
+        path: /etc/profile
+        state: present
+        regexp: "^    umask 022"
+        line: "    umask 027"
+      tags:
+        - SHLL-6230
+
+    # ..######..##....##.####.########.....########.########..######..########..######.
+    # .##....##.##...##...##..##.....##.......##....##.......##....##....##....##....##
+    # .##.......##..##....##..##.....##.......##....##.......##..........##....##......
+    # ..######..#####.....##..########........##....######....######.....##.....######.
+    # .......##.##..##....##..##..............##....##.............##....##..........##
+    # .##....##.##...##...##..##..............##....##.......##....##....##....##....##
+    # ..######..##....##.####.##..............##....########..######.....##.....######.
+
+    - name: Copy default lynis profile
+      copy:
+        src: /etc/lynis/default.prf
+        dest: /etc/lynis/custom.prf
+        remote_src: true
+
+    - name: Skip AUTH-9408. FAILLOG_ENAB is not supported.
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=AUTH-9408"
+        line: "skip-test=AUTH-9408"
+      tags:
+        - AUTH-9408
+
+    #
+    # In production, each server will have the CloudWatch agent
+    # to handle remote logging.
+    #
+    - name: Skip LOGG-2154 no remote logging
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=LOGG-2154"
+        line: "skip-test=LOGG-2154"
+      tags:
+        - LOGG-2154
+
+    #
+    # FCOS is being hardened for use inside enclaves. Nameserver
+    # resolution will be handled by an operations team.
+    - name: Skip NETW-2705 (Check availability two nameservers)
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=NETW-2705"
+        line: "skip-test=NETW-2705"
+      tags:
+        - NETW-2705
+
+    - name: Skip PKGS-7420 Systems will be terminated, not updated.
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=PKGS-7420"
+        line: "skip-test=PKGS-7420"
+      tags:
+        - PKGS-7420
+
+    #
+    # SSH-7408 checks to see if the server runs SSH on something other 
+    # than 22 (the default port). 
+    #
+    # Changing the port is a bit complex in an automated provision.
+    #  - switch to terraform to generate custom security group.
+    #  - connect via 22:
+    #      - change the port number in /etc/ssh/sshd_config.
+    #      - semanage port -a -t ssh_port_t -p tcp 15762
+    #      - sudo systemctl restart sshd
+    #  - change ansible and other scripts to use the new port number.
+    #
+    # All of that work is possible but should not be done on a whim.
+    #
+    - name: Skip SSH-7408 SSH non-default port
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=SSH-7408:Port"
+        line: "skip-test=SSH-7408:Port"
+      tags:
+        - SSH-7408
+
+    - name: SSH-7440 (Check OpenSSH option AllowUsers and AllowGroups)
+      copy:
+        dest: /etc/ssh/sshd_config.d/lynis.conf
+        content: |
+          AllowUsers core
+        mode: "644"
+      tags:
+        - SSH-7440
+
+    # .##.....##..######..########.
+    # .##.....##.##....##.##.....##
+    # .##.....##.##.......##.....##
+    # .##.....##..######..########.
+    # .##.....##.......##.##.....##
+    # .##.....##.##....##.##.....##
+    # ..#######...######..########.
+
+    - name: USB-3000 (Check for presence of USBGuard)
+      lineinfile:
+        path: /etc/usbguard/usbguard-daemon.conf
+        state: present
+        regexp: "^PresentControllerPolicy="
+        line: "PresentControllerPolicy=apply-policy"
+      tags:
+        - USB-3000
