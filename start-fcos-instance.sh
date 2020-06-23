@@ -1,5 +1,10 @@
 #!/bin/bash
 
+#
+# This script provisions a Fedora CoreOS with the minimum tooling needed
+# to run Ansible (i.e. python).
+#
+
 type aws > /dev/null
 if [ $? != 0 ]; then
   echo "Install aws CLI."
@@ -27,15 +32,6 @@ fi
 ENABLE_RPM_OSTREE=1
 
 #
-# I don't know that these playbooks are 100% indenpendent of each other. I think
-# they are but the assertion is unproven.
-#
-ENABLE_CLOUDWATCH_AGENT_PLAYBOOK=0
-ENABLE_SSM_AGENT_PLAYBOOK=0
-ENABLE_LYNIS_65_PLAYBOOK=1
-ENABLE_LYNIS_79_PLAYBOOK=0
-
-#
 # Visit the following URL to determine the AMI that you want to start.
 #   https://getfedora.org/en/coreos/download?tab=cloud_launchable&stream=stable
 #
@@ -48,17 +44,15 @@ ENABLE_LYNIS_79_PLAYBOOK=0
 
 AMI="ami-0ac9fa195c3a98c56"    # 32.20200601.3.0 stable
 
-AMI="ami-0d42d687e65a2f5bf"
+#AMI="ami-0d42d687e65a2f5bf"
 
 LYNIS_HARDENING_SCORE=$(aws ec2 describe-images --image-ids $AMI --query 'Images[].Tags[?Key==`lynis-hardening-score`].Value[]' --output text)
 if [ ! -z $LYNIS_HARDENING_SCORE ]; then
   # The AMI was previously created by this script so some steps can be avoided.
-  ENABLE_LYNIS_65_PLAYBOOK=0
   ENABLE_RPM_OSTREE=0
 fi
 
 echo "LYNIS_HARDENING_SCORE: $LYNIS_HARDENING_SCORE"
-echo "ENABLE_LYNIS_65_PLAYBOOK: $ENABLE_LYNIS_65_PLAYBOOK"
 echo "ENABLE_RPM_OSTREE: $ENABLE_RPM_OSTREE"
 
 AWS_PROFILE="ic1"
@@ -113,6 +107,16 @@ fi
 
 PKI_PUBLIC_KEY=$(cat $PKI_PUBLIC_PUB)
 
+#
+# While it is possible to create files using the Ignition file,
+# you can't write onto a read-only file like /etc/issue. Trying 
+# only provisions a broken server that you can't SSH into.
+#
+# https://coreos.com/os/docs/latest/update-strategies.html talks
+# about update-engine.service and locksmithd.service files but those 
+# are not on the FCOS image that we are using. As far as I know,
+# Zincatti is the update mechanism.
+
 cat <<EOF > $IGNITION_FILE_BASE.fcc
 variant: fcos
 version: 1.0.0
@@ -125,6 +129,16 @@ systemd:
   units:
     - name: docker.service
       enabled: true
+# storage:
+#   files:
+#     - path: /etc/issue.d/80_warning.issue
+#       contents:
+#         inline: |
+#           This is a secure server.
+#           Are you here by owner consent?
+#           Unless you have been invited, access is prohibited. 
+#           This is your last warning. 
+#           All activities are monitored.
 EOF
 
 echo "Pulling fcc compiler from quay.io."
@@ -140,12 +154,6 @@ fi
 
 INSTANCE_NAME="fcos-$(date +%Y%m%d%H%M%S)"
 
-if [ $ENABLE_SSM_AGENT_PLAYBOOK == 1 ]; then
-  SSM_TAG=",{Key=ssm-installed,Value=true}"
-else
-  SSM_TAG=""
-fi
-
 echo "Starting instance."
 INSTANCE_ID=$(aws ec2 run-instances \
   --associate-public-ip-address \
@@ -156,7 +164,7 @@ INSTANCE_ID=$(aws ec2 run-instances \
   --region $AWS_REGION \
   --security-group-ids $SECURITY_GROUP_ID \
   --subnet-id $SUBNET_ID \
-  --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$INSTANCE_NAME}${SSM_TAG}]" \
+  --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$INSTANCE_NAME}]" \
   --user-data file://$IGNITION_FILE_BASE.ign \
   --query 'Instances[0].InstanceId' \
   --output text)
@@ -176,46 +184,13 @@ ssh-keygen -R $PUBLIC_IP > /dev/null 2>&1
 echo "get ssh fingerprint."
 ssh-keyscan -H $PUBLIC_IP >> ~/.ssh/known_hosts 2>/dev/null
 
-# Reasons To Install Packages
-# audit - to enable /var/log/audit/audit.log.
-# golang
-# setools setroubleshoot - to debug selinux issues and needed by auditd.
-# python libselinux-python3 - to support ansible
-# udica - helps to generate selinux policies but I don't want it.
+echo "Install packages one by one. More specific errors this way."
+ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install python libselinux-python3"
 
-#
-# How to remove all packages:
-#   sudo rpm-ostree uninstall --all
-#
-
-if [ $ENABLE_RPM_OSTREE == 1 ]; then
-  echo "Install packages one by one. More specific errors this way."
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install python libselinux-python3"
-
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install audit"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install conntrack"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install ethtool"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install golang"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install lynis"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install make"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install openscap-scanner"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install scap-security-guide"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install setools"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install usbguard"
-  ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install zip"
-
-  #
-  # Installing setroubeshoot causes the following conflict:
-  #   Forbidden base package replacements:
-  #     libreport-filesystem 2.12.0-1.fc31 -> 2.13.1-3.fc31 (updates)
-  # ssh -t -i $PKI_PRIVATE_PEM $SSH_USER@$PUBLIC_IP "sudo rpm-ostree install setroubleshoot"
-
-  echo "reboot instance."
-  aws ec2 reboot-instances --instance-ids $INSTANCE_ID --region $AWS_REGION
-  echo "waiting for reboot command to process"
-  sleep 10
-fi 
-
+echo "reboot instance."
+aws ec2 reboot-instances --instance-ids $INSTANCE_ID --region $AWS_REGION
+echo "waiting for reboot command to process"
+sleep 10
 
 ./test-ssh.sh $PUBLIC_IP $PKI_PRIVATE_PEM $SSH_USER
 
@@ -224,41 +199,6 @@ cat <<EOF >inventory
 [fcos]
 $PUBLIC_IP
 EOF
-
-echo "run playbook."
-
-if [ $ENABLE_SSM_AGENT_PLAYBOOK == 1 ]; then
-  python3 $(which ansible-playbook) \
-      --extra-vars "ssm_binary_dir=$SSM_BINARY_DIR" \
-      -i inventory \
-      --private-key $PKI_PRIVATE_PEM \
-      -u $SSH_USER \
-      playbook.aws-ssm-agent.yml
-fi
-
-if [ $ENABLE_CLOUDWATCH_AGENT_PLAYBOOK == 1 ]; then
-  python3 $(which ansible-playbook) \
-      -i inventory \
-      --private-key $PKI_PRIVATE_PEM \
-      -u $SSH_USER \
-      playbook.aws-cloudwatch-agent.yml
-fi
-
-if [ $ENABLE_LYNIS_65_PLAYBOOK == 1]; then
-  python3 $(which ansible-playbook) \
-      -i inventory \
-      --private-key $PKI_PRIVATE_PEM \
-      -u $SSH_USER \
-      playbook.lynis.65.yml
-fi 
-
-if [ $ENABLE_LYNIS_79_PLAYBOOK == 1 ]; then
-  python3 $(which ansible-playbook) \
-      -i inventory \
-      --private-key $PKI_PRIVATE_PEM \
-      -u $SSH_USER \
-      playbook.lynis.79.yml
-fi
 
 echo "display variables."
 cat <<EOF

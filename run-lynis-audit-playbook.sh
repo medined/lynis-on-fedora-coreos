@@ -6,7 +6,8 @@ python3 \
   -u core \
   playbook.lynis.audit.yml
 
+LYNIS_LOG=$(find /tmp/fetched -type f | xargs ls -ltr | tail -n 1 | awk '{print $NF}')
 
-echo "Lynis Log File"
-echo "--------------"
-find /tmp/fetched -type f | xargs ls -ltr | tail -n 1
+cp $LYNIS_LOG ./lynis.log
+
+cat ./lynis.log

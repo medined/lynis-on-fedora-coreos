@@ -1,0 +1,15 @@
+---
+- hosts: fcos
+  gather_facts: false
+  become: yes
+
+  vars_files:
+    - external_vars.yml
+
+  tasks:
+
+      # A harmless task to as placeholder.
+    - debug:
+        var: ansible_python_interpreter
+
+

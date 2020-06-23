@@ -1,0 +1,154 @@
+#
+# Fedora CoreOS installs packages in layers. The new
+# layer does not become active until the server reboots.
+# Therefore server configuration happens in two phases; one before 
+# reboot and another after.
+#
+# This is the before reboot phase.
+#
+#
+# Ansible complains about rpm used to check if a package has been 
+# installed. That's why each command has warnings turned off.
+#
+
+---
+- hosts: fcos
+  become: yes
+  gather_facts: false
+
+  vars_files:
+    - external_vars.yml
+
+  tasks:
+
+      - name: Create Lynis Yum repository file.
+        copy:
+          dest: /etc/yum.repos.d/lynis.repo
+          content: |
+            [lynis]
+            name=CISOfy Software - Lynis package
+            baseurl=https://packages.cisofy.com/community/lynis/rpm/
+            enabled=1
+            gpgkey=https://packages.cisofy.com/keys/cisofy-software-rpms-public.key
+            gpgcheck=1
+            priority=2
+          mode: "644"
+
+      #
+      # I ran into trouble installing aide. There was a library mismatch.
+      #   Forbidden base package replacements:
+      #     pcre2 10.35-1.fc32 -> 10.35-3.fc32 (updates)
+      #     pcre2-syntax 10.35-1.fc32 -> 10.35-3.fc32 (updates)
+      #
+      # - name: Install aide.
+      #   shell: rpm-ostree install aide
+      #   register: output
+      #   changed_when: "'start a reboot' in output.stdout"
+      #   failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+      #   args:
+      #       warn: false
+
+      - name: Install audit.
+        shell: rpm-ostree install audit
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      - name: Install conntrack.
+        shell: rpm-ostree install conntrack
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      - name: Install ethtool.
+        shell: rpm-ostree install ethtool
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      # - name: Install goland.
+      #   shell: rpm-ostree install golang
+      #   register: output
+      #   changed_when: "'start a reboot' in output.stdout"
+      #   failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+      #   args:
+      #       warn: false
+
+      - name: Install lynis.
+        shell: rpm-ostree install lynis
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      - name: Install make.
+        shell: rpm-ostree install make
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      - name: Install openscap-scanner.
+        shell: rpm-ostree install openscap-scanner
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      - name: Install scap-security-guide.
+        shell: rpm-ostree install scap-security-guide
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      - name: Install setools.
+        shell: rpm-ostree install setools
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      #
+      # I ran into trouble installing setroubleshoot. There was a library mismatch.
+      #   Forbidden base package replacements:
+      #     pcre2 10.35-1.fc32 -> 10.35-3.fc32 (updates)
+      #     pcre2-syntax 10.35-1.fc32 -> 10.35-3.fc32 (updates)
+      #
+      # - name: Install setroubleshoot.
+      #   shell: rpm-ostree install setroubleshoot
+      #   register: output
+      #   changed_when: "'start a reboot' in output.stdout"
+      #   failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+      #   args:
+      #       warn: false
+
+      - name: Install usbguard.
+        shell: rpm-ostree install usbguard
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      - name: Install zip.
+        shell: rpm-ostree install zip
+        register: output
+        changed_when: "'start a reboot' in output.stdout"
+        failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+        args:
+            warn: false
+
+      - name: Unconditionally reboot the machine
+        reboot:
