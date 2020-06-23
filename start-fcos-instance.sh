@@ -107,6 +107,16 @@ fi
 
 PKI_PUBLIC_KEY=$(cat $PKI_PUBLIC_PUB)
 
+#
+# While it is possible to create files using the Ignition file,
+# you can't write onto a read-only file like /etc/issue. Trying 
+# only provisions a broken server that you can't SSH into.
+#
+# https://coreos.com/os/docs/latest/update-strategies.html talks
+# about update-engine.service and locksmithd.service files but those 
+# are not on the FCOS image that we are using. As far as I know,
+# Zincatti is the update mechanism.
+
 cat <<EOF > $IGNITION_FILE_BASE.fcc
 variant: fcos
 version: 1.0.0
@@ -119,6 +129,16 @@ systemd:
   units:
     - name: docker.service
       enabled: true
+# storage:
+#   files:
+#     - path: /etc/issue.d/80_warning.issue
+#       contents:
+#         inline: |
+#           This is a secure server.
+#           Are you here by owner consent?
+#           Unless you have been invited, access is prohibited. 
+#           This is your last warning. 
+#           All activities are monitored.
 EOF
 
 echo "Pulling fcc compiler from quay.io."

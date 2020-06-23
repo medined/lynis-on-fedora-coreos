@@ -4,20 +4,11 @@ This project tries to pass every possible test that Lydis runs. If passing is no
 
 This work is being done at the request of the Enterprise Container Working Group (ECWG) of the Office of Information and Technology (OIT - https://www.oit.va.gov/) at the Department of Veteran Affairs.
 
-## Goal
+On 2020-Jun-23, a Lynis Hardening Index of 98 was acheived. This is as far as I will take the project for now.
 
-* Provision an EC2 instance based on a Fedora CoreOS AMI. The instance name will be timestamped so you can make more than one.
-* Pass as many Lydis tests as possible.
+Please read the **Skip Tests** section in `playbook-02-lynis-98.yml` to understand which tests were skipped and why.
 
-## Commentary
-
-I'm working through how to efficiently mitigate the findings from Lydis. Provisioning a server complete with running `rpm-ostree` and playbooks does take awhile. And I'm not full-time on this project. My current thinking is to label playbook with the hardening score achieved after running them. This might make it easier to review or repeat the work.
-
-
-## Links
-
-* https://cisofy.com/lynis/
-* https://github.com/CISOfy/lynis-ansible
+Handy Note: A server is identified as `Fedora CoreOS` server using the ID=fedora and VARIANT_ID=coreos fields in the /etc/os-release file.
 
 ## Definitions
 
@@ -26,17 +17,6 @@ I'm working through how to efficiently mitigate the findings from Lydis. Provisi
 [**Lynis**](https://cisofy.com/lynis/) is a battle-tested security tool for systems running Linux, macOS, or Unix-based operating system. It performs an extensive health scan of your systems to support system hardening and compliance testing. The project is open source software with the GPL license and available since 2007.
 
 ## Configuration
-
-## Generate GRUB Password
-
-The grub boot loader should be password protected. This password is only needed by some physically at the server. Normal reboots are not affected. This is a manual process because I don't want to bury this information inside scripts. Password creation is important. The following command. Enter a password twice. Save the password somewhere in case you do need physical access to the server.
-
-```bash
-grub-mkpasswd-pbkdf2
-PBKDF2 hash of your password is grub.pbkdf2.sha512.10000...042D445
-```
-
-Copy the part after "is " into a file called `grub_password.txt`. I've shortened the value to save space. If you use a different name, make sure to update `grub_password_file` in `external_vars.yml`.
 
 ### external_vars.yml
 
@@ -49,12 +29,26 @@ The grub password is stored inside a file so that it won't be added to the code 
 ```yaml
 ---
 ansible_python_interpreter: /usr/bin/python3
-password_max_days: 90
-password_min_days: 1
-ssh_port: 15762
+banner_text_file: file-banner-text.txt
 grub_password_file: grub-password.txt
 grub_user: core
+password_max_days: 90
+password_min_days: 1
+sha_crypt_max_rounds: 10000
+sha_crypt_min_rounds: 5000
+ssh_port: 15762
 ```
+
+## Generate GRUB Password
+
+The grub boot loader should be password protected. This password is only needed by some physically at the server. Normal reboots are not affected. This is a manual process because I don't want to bury this information inside scripts. Password creation is important. The following command. Enter a password twice. Save the password somewhere in case you do need physical access to the server.
+
+```bash
+grub-mkpasswd-pbkdf2
+PBKDF2 hash of your password is grub.pbkdf2.sha512.10000...042D445
+```
+
+Copy the part after "is " into a file called `grub_password.txt`. I've shortened the value to save space. If you use a different name, make sure to update `grub_password_file` in `external_vars.yml`.
 
 ### start-fcos-instance.sh
 
@@ -81,7 +75,7 @@ As you harden your instance, you can create an AMI to "save" your progress. If t
 ```bash
 ./start-fcos-instance.sh
 ./run-01-ostree-playbook.sh
-./run-02-lynis-77-playbook.sh
+./run-02-lynis-98-playbook.sh
 ```
 
 The first script starts a new instance, installs python and then reboots.
@@ -102,10 +96,6 @@ Now you can start to harden the server.
 ./run-lynis-audit-playbook.sh
 ```
 
-## Test Comments
-
-* AUTH-9408 (Logging of failed login attempts) - FAILLOG_ENAB is not supported.
-
 # Backup Information
 
 ## Getting Amazon SSM Agent
@@ -124,3 +114,8 @@ Use the following command as a guide.
 ```bash
 ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
 ```
+
+## Links
+
+* https://cisofy.com/lynis/
+* https://github.com/CISOfy/lynis-ansible

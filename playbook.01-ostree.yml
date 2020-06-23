@@ -34,6 +34,20 @@
             priority=2
           mode: "644"
 
+      #
+      # I ran into trouble installing aide. There was a library mismatch.
+      #   Forbidden base package replacements:
+      #     pcre2 10.35-1.fc32 -> 10.35-3.fc32 (updates)
+      #     pcre2-syntax 10.35-1.fc32 -> 10.35-3.fc32 (updates)
+      #
+      # - name: Install aide.
+      #   shell: rpm-ostree install aide
+      #   register: output
+      #   changed_when: "'start a reboot' in output.stdout"
+      #   failed_when: "'start a reboot' not in output.stdout and 'already requested' not in output.stderr"
+      #   args:
+      #       warn: false
+
       - name: Install audit.
         shell: rpm-ostree install audit
         register: output
@@ -108,6 +122,9 @@
 
       #
       # I ran into trouble installing setroubleshoot. There was a library mismatch.
+      #   Forbidden base package replacements:
+      #     pcre2 10.35-1.fc32 -> 10.35-3.fc32 (updates)
+      #     pcre2-syntax 10.35-1.fc32 -> 10.35-3.fc32 (updates)
       #
       # - name: Install setroubleshoot.
       #   shell: rpm-ostree install setroubleshoot

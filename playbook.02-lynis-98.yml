@@ -1,0 +1,801 @@
+---
+- hosts: fcos
+  gather_facts: false
+  become: yes
+
+  vars_files:
+    - external_vars.yml
+
+  tasks:
+
+    #
+    # This task should fail if the password file is not found.
+    - set_fact:
+        grub_password: "{{lookup('file', grub_password_file) }}"
+
+
+    # ..######..########..#######..########......######..########.########..##.....##.####..######..########..######.
+    # .##....##....##....##.....##.##.....##....##....##.##.......##.....##.##.....##..##..##....##.##.......##....##
+    # .##..........##....##.....##.##.....##....##.......##.......##.....##.##.....##..##..##.......##.......##......
+    # ..######.....##....##.....##.########......######..######...########..##.....##..##..##.......######....######.
+    # .......##....##....##.....##.##.................##.##.......##...##....##...##...##..##.......##.............##
+    # .##....##....##....##.....##.##...........##....##.##.......##....##....##.##....##..##....##.##.......##....##
+    # ..######.....##.....#######..##............######..########.##.....##....###....####..######..########..######.
+
+    #
+    # I'll be terminating images instead of auto-updating. Also 
+    # my servers might not have access to the Internet.
+    #
+    - name: Stop and Disable Zincati auto-updating
+      become: yes
+      systemd:
+        daemon_reload: yes
+        enabled: no
+        masked: yes
+        name: zincati
+        state: stopped
+
+    - name: Disable service debug-shell
+      become: yes
+      systemd:
+        daemon_reload: yes
+        enabled: no
+        masked: yes
+        name: debug-shell.service
+        state: stopped
+      tags:
+        - service_debug-shell_disabled
+        - medium_severity
+        - disable_strategy
+        - low_complexity
+        - low_disruption
+        - no_reboot_needed
+        - CCE-82496-1
+        - NIST-800-171-3.4.5
+
+
+    # ....###....##.....##.########.##.....##
+    # ...##.##...##.....##....##....##.....##
+    # ..##...##..##.....##....##....##.....##
+    # .##.....##.##.....##....##....#########
+    # .#########.##.....##....##....##.....##
+    # .##.....##.##.....##....##....##.....##
+    # .##.....##..#######.....##....##.....##
+
+
+    - name: AUTH-9216 - Remove unused entries from /etc/gshadow
+      become: yes
+      lineinfile:
+        path: /etc/gshadow
+        state: absent
+        regexp: "{{ item }}"
+      with_items:
+        - "^audio:"
+        - "^bin:"
+        - "^cdrom:"
+        - "^daemon:"
+        - "^dialout:"
+        - "^disk:"
+        - "^floppy:"
+        - "^ftp:"
+        - "^games:"
+        - "^kmem:"
+        - "^kvm:"
+        - "^lock:"
+        - "^lp:"
+        - "^mail:"
+        - "^man:"
+        - "^mem:"
+        - "^nobody:"
+        - "^printadmin:"
+        - "^render:"
+        - "^sys:"
+        - "^systemd-coredump:"
+        - "^tape:"
+        - "^tty:"
+        - "^users:"
+        - "^video:"
+      tags:
+        - AUTH-9216
+
+    - name: AUTH-9216 - Add sudo to /etc/gshadow to match /etc/group
+      lineinfile:
+        path: /etc/gshadow
+        state: present
+        regexp: "^sudo:"
+        line: "sudo:x::core"
+      tags:
+        - AUTH-9216
+
+    - name: AUTH-9216 - Add sudo to /etc/gshadow to match /etc/group
+      lineinfile:
+        path: /etc/gshadow
+        state: present
+        regexp: "^systemd-journal:"
+        line: "systemd-journal:x::core"
+      tags:
+        - AUTH-9216
+
+    - name: AUTH-9228 - Remove unused entries from /etc/shadow
+      lineinfile:
+        path: /etc/shadow
+        state: absent
+        regexp: "{{ item }}"
+      with_items:
+        - "^bin:"
+        - "^daemon:"
+        - "^adm:"
+        - "^lp:"
+        - "^sync:"
+        - "^shutdown:"
+        - "^halt:"
+        - "^mail:"
+        - "^operator:"
+        - "^games:"
+        - "^ftp:"
+        - "^nobody:"
+        - "^systemd-coredump:"
+      tags:
+        - AUTH-9228
+
+    - name: AUTH-9230 password hashing rounds - min
+      lineinfile:
+        path: /etc/login.defs
+        state: present
+        regexp: "^SHA_CRYPT_MIN_ROUNDS"
+        line: "SHA_CRYPT_MIN_ROUNDS {{ sha_crypt_min_rounds }}"
+      tags:
+        - AUTH-9230
+
+    - name: AUTH-9230 password hashing rounds - max
+      lineinfile:
+        path: /etc/login.defs
+        state: present
+        regexp: "^SHA_CRYPT_MAX_ROUNDS"
+        line: "SHA_CRYPT_MAX_ROUNDS {{ sha_crypt_max_rounds }}"
+      tags:
+        - AUTH-9230
+
+    - name: AUTH-9252 - Check ownership and permissions for sudo configuration files
+      file:
+        path: /etc/sudoers.d/coreos-sudo-group
+        state: file
+        mode: "440"
+      tags:
+        - AUTH-9252
+
+    - name: AUTH-9286 - PASS_MAX_DAYS - Checking user password aging
+      lineinfile:
+        path: /etc/login.defs
+        state: present
+        regexp: "^PASS_MAX_DAYS"
+        line: "PASS_MAX_DAYS {{ password_max_days }}"
+      tags:
+        - AUTH-9286
+
+    - name: AUTH-9286 - PASS_MIN_DAYS - Checking user password aging
+      lineinfile:
+        path: /etc/login.defs
+        state: present
+        regexp: "^PASS_MIN_DAYS"
+        line: "PASS_MIN_DAYS {{ password_min_days }}"
+      tags:
+        - AUTH-9286
+
+    - name: AUTH-9328 - Default umask values
+      lineinfile:
+        path: /etc/login.defs
+        state: present
+        regexp: "^UMASK"
+        line: "UMASK 027"
+      tags:
+        - AUTH-9328
+
+    - name: AUTH-9328 - Default umask values in /etc/login.defs
+      copy:
+        dest: /etc/profile.d/umask.sh
+        content: |
+          # By default, we want umask to get set. This sets it for login shell
+          # Current threshold for system reserved uid/gids is 200
+          # You could check uidgid reservation validity in
+          # /usr/share/doc/setup-*/uidgid file
+          if [ $UID -gt 199 ] && [ "`id -gn`" = "`id -un`" ]; then
+              umask 007
+          else
+              umask 027
+          fi
+        mode: "644"
+      tags:
+        - AUTH-9328
+
+    # NIST recommends setting the daemon umask to 027 
+    # (REHL5: http://nvd.nist.gov/scap/content/stylesheet/scap-rhel5-document.htm).
+    #
+    - name: AUTH-9328 - does /etc/init.d/functions exist?
+      stat:
+        path: /etc/init.d/functions
+      register: auth9328
+
+    - name: AUTH-9328 - Default umask values in /etc/init.d/functions
+      lineinfile:
+        path: /etc/init.d/functions
+        state: present
+        regexp: "^umask 022"
+        line: "umask 027"
+      when: auth9328.stat.exists      
+      tags:
+        - AUTH-9328
+
+
+    # .########.....###....##....##.##....##.########.########.
+    # .##.....##...##.##...###...##.###...##.##.......##.....##
+    # .##.....##..##...##..####..##.####..##.##.......##.....##
+    # .########..##.....##.##.##.##.##.##.##.######...########.
+    # .##.....##.#########.##..####.##..####.##.......##...##..
+    # .##.....##.##.....##.##...###.##...###.##.......##....##.
+    # .########..##.....##.##....##.##....##.########.##.....##
+    
+    # This task should fail if the banner text file is not found.
+    - set_fact:
+        banner_text: "{{lookup('file', banner_text_file) }}"
+
+    - name: Banner create banner file
+      copy:
+        dest: /etc/banner.message.txt
+        content: "{{ banner_text }}\n"
+        mode: "644"
+
+    - name: Banner point to banner file
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#Banner"
+        line: "Banner /etc/banner.message.txt"
+
+    - name: Banner restart sshd
+      systemd:
+        name: sshd
+        state: restarted
+
+    - name: Link banner to /etc/issue
+      file:
+        src: /etc/banner.message.txt
+        dest: /etc/issue
+        state: link
+
+    - name: Link banner to /etc/issue.net
+      file:
+        src: /etc/banner.message.txt
+        dest: /etc/issue.net
+        state: link
+
+
+    # .########...#######...#######..########
+    # .##.....##.##.....##.##.....##....##...
+    # .##.....##.##.....##.##.....##....##...
+    # .########..##.....##.##.....##....##...
+    # .##.....##.##.....##.##.....##....##...
+    # .##.....##.##.....##.##.....##....##...
+    # .########...#######...#######.....##...
+
+
+    #
+    # Add a grub password does not prevent using pki keys 
+    # for ssh. A grub password prevents someone with
+    # physical access to the server from logging with
+    # without the grub password.
+    #
+
+    - name: BOOT-5122- Installing template for grub users.
+      template:
+        src: grub-fedora-coreos.j2
+        dest: /etc/grub.d/01_users
+        owner: root
+        group: root
+        mode: "700"
+      tags: BOOT-5122
+
+    - name: BOOT-5122 - add password
+      lineinfile:
+        dest: /etc/grub2.cfg
+        regexp: "^password_pbkdf2 {{ grub_user }}"
+        state: present
+        insertafter: EOF
+        line: "password_pbkdf2 {{ grub_user }} {{ grub_password }}"
+      tags: BOOT-5122
+
+    - name: BOOT-5122 - grub2-mkconfig
+      command: grub2-mkconfig -o /boot/grub2/grub.cfg
+      tags: BOOT-5122
+
+
+    # .########.####.##.......########
+    # .##........##..##.......##......
+    # .##........##..##.......##......
+    # .######....##..##.......######..
+    # .##........##..##.......##......
+    # .##........##..##.......##......
+    # .##.......####.########.########
+
+    #
+    # FCOS does not have an /etc/fstab or cron.
+    #   Therefore the mount command to add hidepid needs to
+    #   run on every boot.
+    #
+    # While this change does work, there may be race conditions
+    # that i am  unaware of.
+    #
+    # There might be user-space applications that depend on access to the 
+    # /proc for information. They would break.
+    #
+    # Running software in default podman/docker containers already has the 
+    # effect of hidepid 
+    #
+    - name: FILE-6344 proc mount - service file
+      copy:
+        dest: /etc/systemd/system/hidepid.service
+        content: |
+          [Unit]
+          Description=Hide pids on /proc
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/mount -o remount,rw,hidepid=2 /proc
+
+          [Timer]
+          OnBootSec=60
+
+          [Install]
+          WantedBy=multi-user.target
+      tags:
+        - FILE-6344
+
+    - name: FILE-6344 proc mount - enable service
+      systemd:
+        daemon_reload: yes
+        enabled: yes
+        masked: no
+        name: hidepid
+
+    #
+    # Some pages on the Internet suggested to use "blacklist <filesystem>"
+    # instead of the "/bin/true" approach. Empirical testing shows that 
+    # the approach below works. At least as far as Lynis is concerned.
+    #
+    - name: FILE-6430 (Disable mounting of some filesystems)
+      copy:
+        dest: /etc/modprobe.d/lynis-blacklist.conf
+        content: |
+          install cramfs /bin/true
+          install hfs /bin/true
+          install hfsplus /bin/true
+          install jffs2 /bin/true
+          install squashfs /bin/true
+          install udf /bin/true
+      tags:
+        - FILE-6430
+        - CCE-80137-3
+
+    # .########..######..########.########..####.##.....##
+    # .##.......##....##....##....##.....##..##..###...###
+    # .##.......##..........##....##.....##..##..####.####
+    # .######....######.....##....########...##..##.###.##
+    # .##.............##....##....##...##....##..##.....##
+    # .##.......##....##....##....##....##...##..##.....##
+    # .##........######.....##....##.....##.####.##.....##
+
+    #
+    # fstrim discards unused blocks on a mounted filesystem. In order to
+    # do this it looks at /etc/fstab which does not exist on FCOS.
+    # 
+    - name: Stop and Disable fstrim
+      systemd:
+        daemon_reload: yes
+        enabled: no
+        masked: yes
+        name: fstrim
+        state: stopped
+
+
+    # .##....##.########.########..##....##.########.##......
+    # .##...##..##.......##.....##.###...##.##.......##......
+    # .##..##...##.......##.....##.####..##.##.......##......
+    # .#####....######...########..##.##.##.######...##......
+    # .##..##...##.......##...##...##..####.##.......##......
+    # .##...##..##.......##....##..##...###.##.......##......
+    # .##....##.########.##.....##.##....##.########.########
+
+    - name: KRNL-5820 - Core dump - profile
+      copy:
+        dest: /etc/profile.d/KRNL-5820.sh
+        content: |
+          ulimit -c 0
+      mode: 644
+      tags:
+        - KRNL-5820
+
+    - name: KRNL-5820 - Core dump - limits
+      copy:
+        dest: /etc/security/limits.d/KRNL-5820.conf
+        content: |
+          #<domain> <type> <item> <value>
+          *         hard   core   0
+      tags:
+        - KRNL-5820
+
+    #
+    # net.ipv6.conf.default.accept_redirects and net.ipv4.conf.all.forwarding are not being set.
+    # 
+    - name: KRNL-6000 (Check sysctl key pairs in scan profile)
+      copy:
+        dest: /etc/sysctl.d/90-lynis.conf
+        content: |
+          kernel.dmesg_restrict=1
+          kernel.kptr_restrict=2
+          kernel.sysrq=0
+          kernel.yama.ptrace_scope=1
+          net.ipv6.conf.all.accept_redirects=0
+          net.ipv4.conf.all.forwarding=0
+          net.ipv4.conf.all.log_martians=1
+          net.ipv4.conf.all.rp_filter=1
+          net.ipv4.conf.all.send_redirects=0
+          net.ipv6.conf.default.accept_redirects=0
+          net.ipv4.conf.default.log_martians=1
+          
+      tags:
+        KRNL-6000
+
+
+    # ..######..##.....##.########.##.......##......
+    # .##....##.##.....##.##.......##.......##......
+    # .##.......##.....##.##.......##.......##......
+    # ..######..#########.######...##.......##......
+    # .......##.##.....##.##.......##.......##......
+    # .##....##.##.....##.##.......##.......##......
+    # ..######..##.....##.########.########.########
+
+    - name: SHLL-6220 (Idle session killing tools or settings)
+      copy:
+        dest: /etc/profile.d/SHLL-6220.sh
+        content: |
+          TMOUT=300
+          readonly TMOUT
+          export TMOUT
+        mode: "644"
+      tags:
+        - SHLL-6220
+
+    - name: SHLL-6230 umask check - /etc/bashrc 002
+      lineinfile:
+        path: /etc/bashrc
+        state: present
+        regexp: "^       umask 002"
+        line: "       umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/bashrc 022
+      lineinfile:
+        path: /etc/bashrc
+        state: present
+        regexp: "^       umask 022"
+        line: "       umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/csh.cshrc 002
+      lineinfile:
+        path: /etc/csh.cshrc
+        state: present
+        regexp: "^    umask 002"
+        line: "    umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/csh.cshrc 022
+      lineinfile:
+        path: /etc/csh.cshrc
+        state: present
+        regexp: "^    umask 022"
+        line: "    umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/profile 002
+      lineinfile:
+        path: /etc/profile
+        state: present
+        regexp: "^    umask 002"
+        line: "    umask 027"
+      tags:
+        - SHLL-6230
+
+    - name: SHLL-6230 umask check - /etc/profile 022
+      lineinfile:
+        path: /etc/profile
+        state: present
+        regexp: "^    umask 022"
+        line: "    umask 027"
+      tags:
+        - SHLL-6230
+
+    # ..######..##....##.####.########.....########.########..######..########..######.
+    # .##....##.##...##...##..##.....##.......##....##.......##....##....##....##....##
+    # .##.......##..##....##..##.....##.......##....##.......##..........##....##......
+    # ..######..#####.....##..########........##....######....######.....##.....######.
+    # .......##.##..##....##..##..............##....##.............##....##..........##
+    # .##....##.##...##...##..##..............##....##.......##....##....##....##....##
+    # ..######..##....##.####.##..............##....########..######.....##.....######.
+
+    - name: Copy default lynis profile
+      copy:
+        src: /etc/lynis/default.prf
+        dest: /etc/lynis/custom.prf
+        remote_src: true
+
+    - name: Skip AUTH-9408. FAILLOG_ENAB is not supported.
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=AUTH-9408"
+        line: "skip-test=AUTH-9408"
+      tags:
+        - AUTH-9408
+
+    #
+    # FCOS does not have a /var/account directory. However,
+    # we do load the audit package which tracks user actions.
+    #
+    - name: Skip ACCT-9622 (Check for available Linux accounting information)
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=ACCT-9622"
+        line: "skip-test=ACCT-9622"
+      tags:
+        ACCT-9622
+
+    #
+    # aide can't be installed because of a package conflict.
+    #
+    - name: Skip FINT-4350 (File integrity software installed)
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=FINT-4350"
+        line: "skip-test=FINT-4350"
+      tags:
+        FINT-4350
+
+    #
+    # malware scans are too environment specific for a generic
+    # project like this to resolve.
+    #
+    - name: Skip HRDN-7230 (Check for malware scanner)
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=HRDN-7230"
+        line: "skip-test=HRDN-7230"
+      tags:
+        HRDN-7230
+
+    #
+    # In production, each server will have the CloudWatch agent
+    # to handle remote logging.
+    #
+    - name: Skip LOGG-2154 no remote logging
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=LOGG-2154"
+        line: "skip-test=LOGG-2154"
+      tags:
+        - LOGG-2154
+
+    #
+    # FCOS is being hardened for use inside enclaves. Nameserver
+    # resolution will be handled by an operations team.
+    - name: Skip NETW-2705 (Check availability two nameservers)
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=NETW-2705"
+        line: "skip-test=NETW-2705"
+      tags:
+        - NETW-2705
+
+    - name: Skip PKGS-7420 Systems will be terminated, not updated.
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=PKGS-7420"
+        line: "skip-test=PKGS-7420"
+      tags:
+        - PKGS-7420
+
+    #
+    # SSH-7408 checks to see if the server runs SSH on something other 
+    # than 22 (the default port). 
+    #
+    # Changing the port is a bit complex in an automated provision.
+    #  - switch to terraform to generate custom security group.
+    #  - connect via 22:
+    #      - change the port number in /etc/ssh/sshd_config.
+    #      - semanage port -a -t ssh_port_t -p tcp 15762
+    #      - sudo systemctl restart sshd
+    #  - change ansible and other scripts to use the new port number.
+    #
+    # All of that work is possible but should not be done on a whim.
+    #
+    - name: Skip SSH-7408 SSH non-default port
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=SSH-7408:Port"
+        line: "skip-test=SSH-7408:Port"
+      tags:
+        - SSH-7408
+
+    #
+    # fail2ban can't be installed because of a package conflict.
+    #
+    - name: Skip TOOL-5190 (Check presence of IDS/IPS tool)
+      lineinfile:
+        path: /etc/lynis/custom.prf
+        state: present
+        regexp: "^skip-test=TOOL-5190"
+        line: "skip-test=TOOL-5190"
+      tags:
+        TOOL-5190
+
+
+    # ..######...######..##.....##
+    # .##....##.##....##.##.....##
+    # .##.......##.......##.....##
+    # ..######...######..#########
+    # .......##.......##.##.....##
+    # .##....##.##....##.##.....##
+    # ..######...######..##.....##
+
+    - name: SSH-7408 - hardening SSH configuration - AllowAgentForwarding
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#AllowAgentForwarding"
+        line: "AllowAgentForwarding no"
+      tags:
+        - SSH-7408
+
+    - name: SSH-7408 - hardening SSH configuration - AllowTcpForwarding
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#AllowTcpForwarding"
+        line: "AllowTcpForwarding no"
+      tags:
+        - SSH-7408
+
+    - name: SSH-7408 - hardening SSH configuration - ClientAliveCountMax
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#ClientAliveCountMax"
+        line: "ClientAliveCountMax 2"
+      tags:
+        - SSH-7408
+
+    - name: SSH-7408 - hardening SSH configuration - Compression
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#Compression"
+        line: "Compression no"
+      tags:
+        - SSH-7408
+        
+    - name: SSH-7408 - hardening SSH configuration - INFO
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#LogLevel"
+        line: "LogLevel VERBOSE"
+      tags:
+        - SSH-7408
+
+    - name: SSH-7408 - hardening SSH configuration - MaxAuthTries
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#MaxAuthTries"
+        line: "MaxAuthTries 3"
+      tags:
+        - SSH-7408
+
+    - name: SSH-7408 - hardening SSH configuration - MaxSessions
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#MaxSessions"
+        line: "MaxSessions 2"
+      tags:
+        - SSH-7408
+
+    # - name: SSH-7408 - hardening SSH configuration - Port
+    #   lineinfile:
+    #     path: /etc/ssh/sshd_config
+    #     state: present
+    #     regexp: "^#Port"
+    #     line: "Port {{ ssh_port }}"
+    #   tags:
+    #     - SSH-7408
+
+    - name: SSH-7408 - hardening SSH configuration - TCPKeepAlive
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#TCPKeepAlive"
+        line: "TCPKeepAlive no"
+      tags:
+        - SSH-7408
+
+    - name: SSH-7408 - hardening SSH configuration - X11Forwarding
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: "^#X11Forwarding"
+        line: "X11Forwarding no"
+      tags:
+        - SSH-7408
+
+    - name: SSH-7440 (Check OpenSSH option AllowUsers and AllowGroups)
+      copy:
+        dest: /etc/ssh/sshd_config.d/lynis.conf
+        content: |
+          AllowUsers core
+        mode: "644"
+      tags:
+        - SSH-7440
+
+
+    # ..######..########..#######..########.....###.....######...########
+    # .##....##....##....##.....##.##.....##...##.##...##....##..##......
+    # .##..........##....##.....##.##.....##..##...##..##........##......
+    # ..######.....##....##.....##.########..##.....##.##...####.######..
+    # .......##....##....##.....##.##...##...#########.##....##..##......
+    # .##....##....##....##.....##.##....##..##.....##.##....##..##......
+    # ..######.....##.....#######..##.....##.##.....##..######...########
+
+    - name: STRG-1840 - Check if USB storage is disabled
+      copy:
+        dest: /etc/modprobe.d/usb.conf
+        content: |
+          blacklist usb-storage
+      tags:
+        - STRG-1840
+
+    - name: STRG-1846 - Check if firewire storage is disabled
+      copy:
+        dest: /etc/modprobe.d/firewire.conf
+        content: |
+          blacklist firewire-core
+      tags:
+        - STRG-1846
+
+
+    # .##.....##..######..########.
+    # .##.....##.##....##.##.....##
+    # .##.....##.##.......##.....##
+    # .##.....##..######..########.
+    # .##.....##.......##.##.....##
+    # .##.....##.##....##.##.....##
+    # ..#######...######..########.
+
+    - name: USB-3000 (Check for presence of USBGuard)
+      lineinfile:
+        path: /etc/usbguard/usbguard-daemon.conf
+        state: present
+        regexp: "^PresentControllerPolicy="
+        line: "PresentControllerPolicy=apply-policy"
+      tags:
+        - USB-3000
